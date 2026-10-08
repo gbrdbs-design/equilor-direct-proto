@@ -1627,7 +1627,8 @@ button.icon-box:hover{background:#d9eef6}
     <a href="#szerzodesek">Szerződések</a>
     <a href="#hozzaferesek">Hozzáférések kezelése</a>
     <hr>
-    <button type="button" id="proto-fill">Űrlap kitöltése mintaadatokkal</button>
+    <button type="button" id="proto-fill">Mintaadatok visszatöltése</button>
+    <button type="button" id="proto-clear">Űrlapok ürítése (hibaállapotok teszteléséhez)</button>
     <button type="button" id="proto-reset">Prototípus alaphelyzetbe</button>
   </div>
   <button type="button" class="proto-toggle" id="proto-toggle" aria-expanded="false" aria-controls="proto-panel"><span class="dot"></span>Prototípus</button>
@@ -1889,6 +1890,19 @@ button.icon-box:hover{background:#d9eef6}
     clearLine(); renderItems();
   });
   function resetOrderForm(){ items = []; renderItems(); clearLine(); ['o-debit','o-credit'].forEach(i => $('#'+i).reset()); $('#o-date').value = ''; }
+  /* Mintaadatok: az új megbízás űrlap kitöltve nyílik, így egy kattintással rögzíthető */
+  function prefillOrder(){
+    resetOrderForm();
+    $('#o-debit').set('5528'); $('#o-credit').set('TB1542945');
+    const d = new Date(); d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    $('#o-date').value = `${d.getFullYear()}. ${pad(d.getMonth()+1)}. ${pad(d.getDate())}.`;
+    curCat = 'SHR - részvény'; $('#o-cat-lbl').innerHTML = `&nbsp;&nbsp;|&nbsp;&nbsp;${esc(curCat)}`; $('#o-sec-val').textContent = secByCat[curCat];
+    $('#o-ccy').set('HUF - magyar forint'); $('#o-qty').value = '120'; $('#o-px').value = '38 450,00'; $('#o-fx').value = '1';
+    calc();
+  }
+  prefillOrder();
+  document.addEventListener('proto:prefill', prefillOrder);
+  document.addEventListener('proto:clear', resetOrderForm);
   $('#order-form').addEventListener('submit', e => {
     e.preventDefault();
     const miss = [];
@@ -1904,7 +1918,7 @@ button.icon-box:hover{background:#d9eef6}
     const o = { id:`EAS25 - ${String(n).padStart(5,'0')}`, type:'Értékpapír átvezetés saját számlák között', status:'wait',
       modified:`${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())}. ${pad(now.getHours())}:${pad(now.getMinutes())}`,
       client: $('#o-client').value, owner: $('#o-owner').value, tbsz: tbszIn.checked ? 'igen' : 'nem', debit: $('#o-debit').value, credit: $('#o-credit').value, date: $('#o-date').value, lines };
-    state.orders.unshift(o); renderOrders(); resetOrderForm(); showDetails(o.id);
+    state.orders.unshift(o); renderOrders(); prefillOrder(); showDetails(o.id);
   });
 
   /* ---------- Megbízás részletei ---------- */
@@ -2216,17 +2230,31 @@ button.icon-box:hover{background:#d9eef6}
   pt.addEventListener('click', e => { e.stopPropagation(); pp.hidden = !pp.hidden; pt.setAttribute('aria-expanded', !pp.hidden); });
   document.addEventListener('click', e => { if (!pp.hidden && !e.target.closest('.proto')) { pp.hidden = true; pt.setAttribute('aria-expanded','false'); } });
   pp.addEventListener('click', e => { if (e.target.closest('a')) { pp.hidden = true; pt.setAttribute('aria-expanded','false'); } });
+  /* Mintaadatok: minden űrlap kitöltve nyílik, így a flow végig kattintható */
+  const SAMPLE_FORM = {'s-code':'dobosg','s-pass':'Equilor2025!','f-code':'154649871','f-name':'Dobos Gábor','f-birthname':'Dobos Gábor','f-country':'Magyarország','f-place':'Miskolc','f-dob':'1985.02.20','f-mother':'Janka Csilla','f-tax':'8412345678','f-email':'info@gabordobos.hu','f-email2':'info@gabordobos.hu','f-phone':'+36 30 345 8937','f-phone2':'+36 30 345 8937'};
+  function clearErrors(){ $$('.field').forEach(f => f.classList.remove('error')); ['c1','c2'].forEach(id => $('#'+id+'-panel').classList.remove('error')); }
+  function prefillSample(){
+    Object.entries(SAMPLE_FORM).forEach(([id,v]) => { $('#'+id).value = v; });
+    setLang('magyar'); syncClear();
+    ['c1','c2'].forEach(id => { $('#'+id).checked = true; });
+    clearErrors();
+  }
+  function clearForms(){
+    form.reset(); $('#signin-form').reset(); setLang(''); syncClear();
+    ['c1','c2'].forEach(id => { $('#'+id).checked = false; });
+    clearErrors();
+  }
+  prefillSample();
   $('#proto-fill').addEventListener('click', () => {
-    const s = {'f-code':'154649871','f-name':'Dobos Gábor','f-birthname':'Dobos Gábor','f-country':'Magyarország','f-place':'Miskolc','f-dob':'1985.02.20','f-mother':'Janka Csilla','f-tax':'8412345678','f-email':'info@gabordobos.hu','f-email2':'info@gabordobos.hu','f-phone':'+36 30 345 8937','f-phone2':'+36 30 345 8937'};
-    Object.entries(s).forEach(([id,v]) => { $('#'+id).value = v; });
-    setLang('magyar'); syncClear(); $$('.field', form).forEach(f => f.classList.remove('error'));
+    prefillSample(); document.dispatchEvent(new Event('proto:prefill'));
+    pp.hidden = true; go('regisztracio-1');
+  });
+  $('#proto-clear').addEventListener('click', () => {
+    clearForms(); data = null; document.dispatchEvent(new Event('proto:clear'));
     pp.hidden = true; go('regisztracio-1');
   });
   $('#proto-reset').addEventListener('click', () => {
-    form.reset(); $('#f-code').value = '154649871'; setLang(''); syncClear(); data = null; sentAt = null;
-    ['c1','c2'].forEach(id => { $('#'+id).checked = false; $('#'+id+'-panel').classList.remove('error'); });
-    $$('.field').forEach(f => f.classList.remove('error'));
-    $('#signin-form').reset();
+    prefillSample(); data = null; sentAt = null; document.dispatchEvent(new Event('proto:prefill'));
     pp.hidden = true; go('bejelentkezes');
   });
 
